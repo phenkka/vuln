@@ -12,21 +12,16 @@ build-images:
   stage: build
   tags: [docker]
   image: 
-    name: quay.io/buildah/stable:v1.33
-    docker:
-      user: root
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
   variables:
     STORAGE_DRIVER: vfs
     BUILDAH_ISOLATION: chroot
     BUILDAH_FORMAT: docker
   script:
-    - mkdir -p "/etc/containers/certs.d/$CI_REGISTRY"
-    - cp "$CI_SERVER_TLS_CA_FILE" "/etc/containers/certs.d/$CI_REGISTRY/ca.crt"
-    - echo "$CI_REGISTRY_PASSWORD" | buildah login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - buildah build -f Dockerfile.back -t "$IMAGE_BACKEND" .
-    - buildah push --digestfile backend.digest "$IMAGE_BACKEND"
-    - buildah build -f frontend/Dockerfile.front -t "$IMAGE_FRONTEND" ./frontend
-    - buildah push --digestfile frontend.digest "$IMAGE_FRONTEND"
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile "$CI_PROJECT_DIR/Dockerfile.back" --destination "$IMAGE_BACKEND" --digest-file backend.digest
+    - /kaniko/executor --context "$CI_PROJECT_DIR/frontend" --dockerfile "$CI_PROJECT_DIR/frontend/Dockerfile.front" --destination "$IMAGE_FRONTEND" --digest-file frontend.digest
   artifacts:
     paths:
       - backend.digest
