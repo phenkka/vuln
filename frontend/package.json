@@ -1,0 +1,12 @@
+{
+  "name": "vulnshop-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static frontend for VulnShop (intentionally outdated dependencies)",
+  "dependencies": {
+    "axios": "0.21.0",
+    "jquery": "3.4.0",
+    "lodash": "4.17.15",
+    "minimist": "1.2.0"
+  }
+}
