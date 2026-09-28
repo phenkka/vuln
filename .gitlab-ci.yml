@@ -1,5 +1,6 @@
 stages:
   - security
+  - build
 
 gitleaks:
   stage: security
@@ -100,28 +101,45 @@ trivy-sca:
       - sbom-js.json
     expire_in: 30 days
 
+build-images:
+  stage: build
+  tags: [docker]
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - docker build -t vulnshop-backend:latest -f Dockerfile.back .
+    - docker build -t vulnshop-frontend:latest -f Dockerfile.front ./frontend
+    - docker save vulnshop-backend:latest -o vulnshop-backend.tar
+    - docker save vulnshop-frontend:latest -o vulnshop-frontend.tar
+  artifacts:
+    paths:
+      - vulnshop-backend.tar
+      - vulnshop-frontend.tar
+    expire_in: 1 day
+
 trivy-container:
   stage: security
   tags: [docker]
   image:
     name: aquasec/trivy:0.50.1
     entrypoint: [""]
-  services:
-    - docker:24-dind
+  needs:
+    - job: build-images
+      artifacts: true
   variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
     TRIVY_SEVERITY: "CRITICAL,HIGH"
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
-    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-dockerfile.json Dockerfile || FAILED=1
-    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-frontend-dockerfile.json frontend/Dockerfile || FAILED=1
-    - docker build -t vulnshop-backend:latest .
-    - docker build -t vulnshop-frontend:latest ./frontend
-    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-backend.json vulnshop-backend:latest || FAILED=1
-    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-frontend.json vulnshop-frontend:latest || FAILED=1
-    - trivy image --format cyclonedx --output sbom-backend.json vulnshop-backend:latest || true
-    - trivy image --format cyclonedx --output sbom-frontend.json vulnshop-frontend:latest || true
+    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-backend-dockerfile.json Dockerfile.back || FAILED=1
+    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-frontend-dockerfile.json frontend/Dockerfile.front || FAILED=1
+    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-backend.json --input vulnshop-backend.tar || FAILED=1
+    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-frontend.json --input vulnshop-frontend.tar || FAILED=1
+    - trivy image --format cyclonedx --output sbom-backend.json --input vulnshop-backend.tar || true
+    - trivy image --format cyclonedx --output sbom-frontend.json --input vulnshop-frontend.tar || true
     - |
       if [ $FAILED -eq 1 ]; then
         echo "Trivy found CRITICAL or HIGH vulnerabilities"
@@ -132,8 +150,8 @@ trivy-container:
   artifacts:
     when: always
     paths:
-      - trivy-config-dockerfile.json
-      - trivy-config-frontend-dockerfile.json
+      - trivy-config-backend.json
+      - trivy-config-frontend.json
       - trivy-image-backend.json
       - trivy-image-frontend.json
       - sbom-backend.json
