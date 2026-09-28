@@ -44,6 +44,7 @@ semgrep:
       python3 - <<'PY'
       import json, os, sys
       threshold = os.environ["SEMGREP_FAIL_SEVERITIES"]
+      thresholds = [s.strip() for s in threshold_str.split(",")]
       r = json.load(open("semgrep-report.json"))
       counts = {}
       for x in r.get("results", []):
@@ -52,9 +53,15 @@ semgrep:
           print(s, x["check_id"].split(".")[-1], x["path"] + ":" + str(x["start"]["line"]))
       print("Totals:", counts)
       print("Scan errors:", len(r.get("errors", [])))
-      if counts.get(threshold, 0) > 0:
-          print("GATE FAILED: findings with severity", threshold)
+      failed = False
+      for t in thresholds:
+          if counts.get(t, 0) > 0:
+              print("Findings with severity {t}")
+              failed = True
+      if failed:
           sys.exit(1)
+      else:
+          print("No findings with threshold severities")
       PY
   artifacts:
     when: always
