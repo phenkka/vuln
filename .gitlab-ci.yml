@@ -16,8 +16,8 @@ build-images:
     entrypoint: [""]
   script:
     - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-    - /kaniko/executor --context . --dockerfile Dockerfile.back --destination "$IMAGE_BACKEND" --digest-file backend.digest
-    - /kaniko/executor --context ./frontend --dockerfile frontend/Dockerfile.front --destination "$IMAGE_FRONTEND" --digest-file frontend.digest
+    - /kaniko/executor --context . --dockerfile Dockerfile --destination "$IMAGE_BACKEND" --digest-file backend.digest
+    - /kaniko/executor --context ./frontend --dockerfile frontend/Dockerfile --destination "$IMAGE_FRONTEND" --digest-file frontend.digest
   artifacts:
     paths:
       - backend.digest
@@ -138,8 +138,8 @@ trivy-container:
     - FAILED=0
     - BACKEND="$CI_REGISTRY_IMAGE/backend@$(cat backend.digest)"
     - FRONTEND="$CI_REGISTRY_IMAGE/frontend@$(cat frontend.digest)"
-    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-backend.json Dockerfile.back || FAILED=1
-    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-frontend.json frontend/Dockerfile.front || FAILED=1
+    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-backend.json Dockerfile || FAILED=1
+    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-frontend.json frontend/Dockerfile || FAILED=1
     - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-backend.json $IMAGE_BACKEND || FAILED=1
     - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-frontend.json $IMAGE_FRONTEND || FAILED=1
     - trivy image --format cyclonedx --output sbom-backend.json $IMAGE_BACKEND
