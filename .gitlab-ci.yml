@@ -1,0 +1,9 @@
+stages:
+  - security
+
+hello:
+  stage: security
+  tags: [docker]
+  image: alpine:3.20
+  script:
+    - echo "runner works"
