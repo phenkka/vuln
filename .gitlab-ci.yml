@@ -73,8 +73,8 @@ trivy-sca:
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - FAILED=0
-    - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --output trivy-sca-python.json . || FAILED=1
-    - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --output trivy-sca-js.json ./frontend || FAILDE=1
+    - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-sca-python.json . || FAILED=1
+    - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-sca-js.json ./frontend || FAILED=1
     - trivy fs --scanners vuln --format cyclonedx --output sbom-python.json . || true
     - trivy fs --scanners vuln --format cyclonedx --output sbom-js.json ./frontend || true
     - |
