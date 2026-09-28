@@ -1,15 +1,14 @@
 stages:
   - security
 
-variables:
-  GIT_DEPTH: 0
-
 gitleaks:
   stage: security
   tags: [docker]
   image: 
     name: zricethezav/gitleaks:v8.18.4
     entrypoint: [""]
+  variables:
+    GIT_DEPTH: 0
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - gitleaks detect --source . --log-opts="--all" --report-format json --report-path gitleaks-report.json --exit-code 1
@@ -62,3 +61,28 @@ semgrep:
     paths:
       - semgrep-report.json
     expire_in: 30 days
+
+trivy-sca:
+  stage: security
+  tags: [docker]
+  image:
+    name: aquasec/trivy:0.50.1
+    entrypoint: [""]
+  variables:
+    TRIVY_SEVERITY: "CRITICAL,HIGH"
+    TRIVY_EXIT_CODE: 1
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --output trivy-sca-python.json --exit-code $TRIVY_EXIT_CODE .
+    - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --output trivy-sca-js.json --exit-code $TRIVY_EXIT_CODE ./frontend
+    - trivy fs --scanners vuln --format cyclonedx --output sbom-python.json . || true
+    - trivy fs --scanners vuln --format cyclonedx --output sbom-js.json ./frontend || true
+  artifacts:
+    when: always
+    paths:
+      - trivy-sca-python.json
+      - trivy-sca-js.json
+      - sbom-python.json
+      - sbom-js.json
+    expire_in: 30 days
+  allow_failure: false
