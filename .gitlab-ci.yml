@@ -18,3 +18,35 @@ gitleaks:
     paths: 
       - gitleaks-report.json
     expire_in: 30 days
+
+semgrep:
+  stage: security
+  tags: [docker]
+  image:
+    name: semgrep/semgrep:1.178.0-nonroot
+    entrypoint: [""]
+  variables: SEMGREP_FAIL_SEVERITY: "ERROR"
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - semgrep scan --config p/python --config p/javascript --config p/owasp-top-ten --metrics=off --json --output semgrep-report.json .
+    - |
+      python3 - <<'PY'
+      import json, os, sys
+      threshold = os.environ["SEMGREP_FAIL_SEVERITY"]
+      r = json.load(open("semgrep-report.json"))
+      counts = {}
+      for x in r.get("results", []):
+          s = x["extra"]["severity"]
+          counts[s] = counts.get(s, 0) + 1
+          print(s, x["check_id"].split(".")[-1], x["path"] + ":" + str(x["start"]["line"]))
+      print("Totals:", counts)
+      print("Scan errors:", len(r.get("errors", [])))
+      if counts.get(threshold, 0) > 0:
+          print("GATE FAILED: findings with severity", threshold)
+          sys.exit(1)
+      PY
+  artifacts:
+    when: always
+    paths:
+      - semgrep-report.json
+    expire_in: 30 days
