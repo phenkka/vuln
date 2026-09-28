@@ -15,6 +15,6 @@ gitleaks:
     - gitleaks detect --source . --log-opts="--all" --report-format json --report-path gitleaks-report.json --exit-code 1
   artifacts:
     when: always
-    path: 
+    paths: 
       - gitleaks_report.json
     expire_in: 30 days
