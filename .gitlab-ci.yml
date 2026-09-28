@@ -14,14 +14,10 @@ build-images:
   image: 
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
-  variables:
-    STORAGE_DRIVER: vfs
-    BUILDAH_ISOLATION: chroot
-    BUILDAH_FORMAT: docker
   script:
     - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-    - /kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile "$CI_PROJECT_DIR/Dockerfile.back" --destination "$IMAGE_BACKEND" --digest-file backend.digest
-    - /kaniko/executor --context "$CI_PROJECT_DIR/frontend" --dockerfile "$CI_PROJECT_DIR/frontend/Dockerfile.front" --destination "$IMAGE_FRONTEND" --digest-file frontend.digest
+    - /kaniko/executor --context . --dockerfile Dockerfile.back --destination "$IMAGE_BACKEND" --digest-file backend.digest
+    - /kaniko/executor --context ./frontend --dockerfile frontend/Dockerfile.front --destination "$IMAGE_FRONTEND" --digest-file frontend.digest
   artifacts:
     paths:
       - backend.digest
