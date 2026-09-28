@@ -104,17 +104,14 @@ trivy-sca:
 build-images:
   stage: build
   tags: [docker]
-  image: docker:24.0.5
-  services:
-    - docker:24.0.5-dind
+  image: quay.io/buildah/stable:v1.33
   variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+    BUILDAH_FORMAT: docker
   script:
-    - docker build -t vulnshop-backend:latest -f Dockerfile.back .
-    - docker build -t vulnshop-frontend:latest -f Dockerfile.front ./frontend
-    - docker save vulnshop-backend:latest -o vulnshop-backend.tar
-    - docker save vulnshop-frontend:latest -o vulnshop-frontend.tar
+    - buildah bud -f Dockerfile.back -t vulnshop-backend:latest .
+    - buildah push vulnshop-backend:latest docker-archive:vulnshop-backend.tar:vulnshop-backend:latest
+    - buildah bud -f frontend/Dockerfile.front -t vulnshop-frontend:latest ./frontend
+    - buildah push vulnshop-frontend:latest docker-archive:vulnshop-frontend.tar:vulnshop-frontend:latest
   artifacts:
     paths:
       - vulnshop-backend.tar
