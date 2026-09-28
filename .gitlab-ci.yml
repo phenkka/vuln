@@ -70,13 +70,20 @@ trivy-sca:
     entrypoint: [""]
   variables:
     TRIVY_SEVERITY: "CRITICAL,HIGH"
-    TRIVY_EXIT_CODE: 1
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
-    - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --output trivy-sca-python.json --exit-code $TRIVY_EXIT_CODE .
-    - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --output trivy-sca-js.json --exit-code $TRIVY_EXIT_CODE ./frontend
+    - FAILED=0
+    - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --output trivy-sca-python.json . || FAILED=1
+    - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --output trivy-sca-js.json ./frontend || FAILDE=1
     - trivy fs --scanners vuln --format cyclonedx --output sbom-python.json . || true
     - trivy fs --scanners vuln --format cyclonedx --output sbom-js.json ./frontend || true
+    - |
+      if [ $FAILED -eq 1 ]; then
+        echo "Trivy found CRITICAL or HIGH vulnerabilities"
+        exit 1
+      else
+        echo "No critical/high vulnerabilities found"
+      fi
   artifacts:
     when: always
     paths:
