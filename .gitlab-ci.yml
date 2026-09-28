@@ -11,13 +11,17 @@ variables:
 build-images:
   stage: build
   tags: [docker]
-  image: 
-    name: gcr.io/kaniko-project/executor:v1.23.2-debug
-    entrypoint: [""]
+  image: quay.io/buildah/stable:v1.33
+  variables:
+    BUILDAH_FORMAT: docker
   script:
-    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-    - /kaniko/executor --dockerfile Dockerfile.back --context . --destination $IMAGE_BACKEND --destination $CI_REGISTRY_IMAGE/backend:latest
-    - /kaniko/executor --dockerfile Dockerfile.front --context ./frontend --destination $IMAGE_FRONTEND --destination $CI_REGISTRY_IMAGE/frontend:latest
+    - echo "$CI_REGISTRY_PASSWORD" | buildah login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - buildah build --isolation chroot -f Dockerfile.back -t "$IMAGE_BACKEND" -t "$CI_REGISTRY_IMAGE/backend:latest" .
+    - buildah push "$IMAGE_BACKEND"
+    - buildah push "$CI_REGISTRY_IMAGE/backend:latest"
+    - buildah build --isolation chroot -f frontend/Dockerfile.front -t "$IMAGE_FRONTEND" -t "$CI_REGISTRY_IMAGE/frontend:latest" ./frontend
+    - buildah push "$IMAGE_FRONTEND"
+    - buildah push "$CI_REGISTRY_IMAGE/frontend:latest"
   rules:
     - if: $CI_COMMIT_BRANCH
 
