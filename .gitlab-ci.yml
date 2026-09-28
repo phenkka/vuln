@@ -17,7 +17,7 @@ build-images:
   script:
     - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
     - /kaniko/executor --dockerfile Dockerfile.back --context . --destination $IMAGE_BACKEND --destination $CI_REGISTRY_IMAGE/backend:latest
-    - /kaniko/executor --dockerfile frontend/Dockerfile.front --context ./frontend --destination $IMAGE_FRONTEND --destination $CI_REGISTRY_IMAGE/frontend:latest
+    - /kaniko/executor --dockerfile Dockerfile.front --context ./frontend --destination $IMAGE_FRONTEND --destination $CI_REGISTRY_IMAGE/frontend:latest
   rules:
     - if: $CI_COMMIT_BRANCH
 
