@@ -1,6 +1,6 @@
 stages:
-  - security
   - build
+  - security
 
 gitleaks:
   stage: security
