@@ -16,6 +16,8 @@ build-images:
     entrypoint: [""]
   script:
     - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - mkdir -p /kaniko/ssl/certs
+    - cp "$CI_SERVER_TLS_CA_FILE" /kaniko/ssl/certs/ca-certificates.crt
     - /kaniko/executor --context . --dockerfile Dockerfile --destination "$IMAGE_BACKEND" --digest-file backend.digest
     - /kaniko/executor --context ./frontend --dockerfile frontend/Dockerfile --destination "$IMAGE_FRONTEND" --digest-file frontend.digest
   artifacts:
