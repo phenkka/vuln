@@ -11,19 +11,27 @@ variables:
 build-images:
   stage: build
   tags: [docker]
-  image: quay.io/buildah/stable:v1.33
+  image: 
+    name: quay.io/buildah/stable:v1.33
+    docker:
+      user: root
   variables:
+    STORAGE_DRIVER: vfs
+    BUILDAH_ISOLATION: chroot
     BUILDAH_FORMAT: docker
   script:
+    - mkdir -p "/etc/containers/certs.d/$CI_REGISTRY"
+    - cp "$CI_SERVER_TLS_CA_FILE" "/etc/containers/certs.d/$CI_REGISTRY/ca.crt"
     - echo "$CI_REGISTRY_PASSWORD" | buildah login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - buildah build --isolation chroot -f Dockerfile.back -t "$IMAGE_BACKEND" -t "$CI_REGISTRY_IMAGE/backend:latest" .
-    - buildah push "$IMAGE_BACKEND"
-    - buildah push "$CI_REGISTRY_IMAGE/backend:latest"
-    - buildah build --isolation chroot -f frontend/Dockerfile.front -t "$IMAGE_FRONTEND" -t "$CI_REGISTRY_IMAGE/frontend:latest" ./frontend
-    - buildah push "$IMAGE_FRONTEND"
-    - buildah push "$CI_REGISTRY_IMAGE/frontend:latest"
-  rules:
-    - if: $CI_COMMIT_BRANCH
+    - buildah build -f Dockerfile.back -t "$IMAGE_BACKEND" .
+    - buildah push --digestfile backend.digest "$IMAGE_BACKEND"
+    - buildah build -f frontend/Dockerfile.front -t "$IMAGE_FRONTEND" ./frontend
+    - buildah push --digestfile frontend.digest "$IMAGE_FRONTEND"
+  artifacts:
+    paths:
+      - backend.digest
+      - frontend.digest
+    expire_in: 1 day
 
 # Этап проверки на безопасность
 gitleaks:
@@ -81,7 +89,7 @@ semgrep:
       failed = False
       for t in thresholds:
           if counts.get(t, 0) > 0:
-              print("Findings with severity {t}")
+              print(f"Findings with severity {t}")
               failed = True
       if failed:
           sys.exit(1)
@@ -103,10 +111,10 @@ trivy-sca:
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - FAILED=0
-    - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-sca-python.json . || FAILED=1
+    - trivy fs --scanners vuln --skip-dirs frontend --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-sca-python.json . || FAILED=1
     - trivy fs --scanners vuln --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-sca-js.json ./frontend || FAILED=1
-    - trivy fs --scanners vuln --format cyclonedx --output sbom-python.json . || true
-    - trivy fs --scanners vuln --format cyclonedx --output sbom-js.json ./frontend || true
+    - trivy fs --scanners vuln --skip-dirs frontend --format cyclonedx --output sbom-python.json .
+    - trivy fs --scanners vuln --format cyclonedx --output sbom-js.json ./frontend
     - |
       if [ $FAILED -eq 1 ]; then
         echo "Trivy found CRITICAL or HIGH vulnerabilities"
@@ -135,13 +143,16 @@ trivy-container:
     TRIVY_USERNAME: $CI_REGISTRY_USER
     TRIVY_PASSWORD: $CI_REGISTRY_PASSWORD
   script:
-    - git config --global --add safe.directory "$CI_PROJECT_DIR"
-    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-backend-dockerfile.json Dockerfile.back || FAILED=1
-    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-frontend-dockerfile.json frontend/Dockerfile.front || FAILED=1
-    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-backend.json --input $IMAGE_BACKEND || FAILED=1
-    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-frontend.json --input $IMAGE_FRONTEND || FAILED=1
-    - trivy image --format cyclonedx --output sbom-backend.json --input $IMAGE_BACKEND || true
-    - trivy image --format cyclonedx --output sbom-frontend.json --input $IMAGE_FRONTEND || true
+    - export SSL_CERT_FILE="$CI_SERVER_TLS_CA_FILE"
+    - FAILED=0
+    - BACKEND="$CI_REGISTRY_IMAGE/backend@$(cat backend.digest)"
+    - FRONTEND="$CI_REGISTRY_IMAGE/frontend@$(cat frontend.digest)"
+    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-backend.json Dockerfile.back || FAILED=1
+    - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-frontend.json frontend/Dockerfile.front || FAILED=1
+    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-backend.json $IMAGE_BACKEND || FAILED=1
+    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-frontend.json $IMAGE_FRONTEND || FAILED=1
+    - trivy image --format cyclonedx --output sbom-backend.json $IMAGE_BACKEND
+    - trivy image --format cyclonedx --output sbom-frontend.json $IMAGE_FRONTEND
     - |
       if [ $FAILED -eq 1 ]; then
         echo "Trivy found CRITICAL or HIGH vulnerabilities"
