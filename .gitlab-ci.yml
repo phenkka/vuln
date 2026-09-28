@@ -2,6 +2,26 @@ stages:
   - build
   - security
 
+variables:
+  TRIVY_SEVERITY: "CRITICAL,HIGH"
+  IMAGE_BACKEND: "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA"
+  IMAGE_FRONTEND: "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA"
+
+# Этап сборки образов
+build-images:
+  stage: build
+  tags: [docker]
+  image: 
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  script:
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --dockerfile Dockerfile.back --context . --destination $IMAGE_BACKEND --destination $CI_REGISTRY_IMAGE/backend:latest
+    - /kaniko/executor --dockerfile frontend/Dockerfile.front --context ./frontend --destination $IMAGE_FRONTEND --destination $CI_REGISTRY_IMAGE/frontend:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+# Этап проверки на безопасность
 gitleaks:
   stage: security
   tags: [docker]
@@ -76,8 +96,6 @@ trivy-sca:
   image:
     name: aquasec/trivy:0.50.1
     entrypoint: [""]
-  variables:
-    TRIVY_SEVERITY: "CRITICAL,HIGH"
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - FAILED=0
@@ -101,23 +119,6 @@ trivy-sca:
       - sbom-js.json
     expire_in: 30 days
 
-build-images:
-  stage: build
-  tags: [docker]
-  image: quay.io/buildah/stable:v1.33
-  variables:
-    BUILDAH_FORMAT: docker
-  script:
-    - buildah bud -f Dockerfile.back -t vulnshop-backend:latest .
-    - buildah push vulnshop-backend:latest docker-archive:vulnshop-backend.tar:vulnshop-backend:latest
-    - buildah bud -f frontend/Dockerfile.front -t vulnshop-frontend:latest ./frontend
-    - buildah push vulnshop-frontend:latest docker-archive:vulnshop-frontend.tar:vulnshop-frontend:latest
-  artifacts:
-    paths:
-      - vulnshop-backend.tar
-      - vulnshop-frontend.tar
-    expire_in: 1 day
-
 trivy-container:
   stage: security
   tags: [docker]
@@ -126,17 +127,17 @@ trivy-container:
     entrypoint: [""]
   needs:
     - job: build-images
-      artifacts: true
   variables:
-    TRIVY_SEVERITY: "CRITICAL,HIGH"
+    TRIVY_USERNAME: $CI_REGISTRY_USER
+    TRIVY_PASSWORD: $CI_REGISTRY_PASSWORD
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-backend-dockerfile.json Dockerfile.back || FAILED=1
     - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-frontend-dockerfile.json frontend/Dockerfile.front || FAILED=1
-    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-backend.json --input vulnshop-backend.tar || FAILED=1
-    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-frontend.json --input vulnshop-frontend.tar || FAILED=1
-    - trivy image --format cyclonedx --output sbom-backend.json --input vulnshop-backend.tar || true
-    - trivy image --format cyclonedx --output sbom-frontend.json --input vulnshop-frontend.tar || true
+    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-backend.json --input $IMAGE_BACKEND || FAILED=1
+    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-frontend.json --input $IMAGE_FRONTEND || FAILED=1
+    - trivy image --format cyclonedx --output sbom-backend.json --input $IMAGE_BACKEND || true
+    - trivy image --format cyclonedx --output sbom-frontend.json --input $IMAGE_FRONTEND || true
     - |
       if [ $FAILED -eq 1 ]; then
         echo "Trivy found CRITICAL or HIGH vulnerabilities"
