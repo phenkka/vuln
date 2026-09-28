@@ -29,7 +29,17 @@ semgrep:
     SEMGREP_FAIL_SEVERITIES: "ERROR,WARNING"
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
-    - semgrep scan --config p/python --config p/javascript --config p/owasp-top-ten --config p/security-audit --config p/xss --metrics=off --json --output semgrep-report.json .
+    - semgrep scan \
+      --config p/python \
+      --config p/javascript \
+      --config p/owasp-top-ten \
+      --config p/security-audit \
+      --config p/xss \
+      --config p/secrets \
+      --config p/ci \
+      --config p/cwe-top-25 \
+      --config p/command-injection \
+      --metrics=off --json --output semgrep-report.json .
     - |
       python3 - <<'PY'
       import json, os, sys
