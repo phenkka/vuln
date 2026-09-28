@@ -1,6 +1,6 @@
 # Backend (Flask). Намеренно "как у разработчиков": старый базовый образ,
 # root-пользователь, нет HEALTHCHECK, apt без очистки, нет .dockerignore.
-FROM python:3.9-slim-bullseye
+FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
