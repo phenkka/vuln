@@ -1,9 +1,19 @@
 stages:
   - security
 
-hello:
+variables:
+  GIT_DEPTH: 0
+
+gitleaks:
   stage: security
   tags: [docker]
-  image: alpine:3.20
+  image: 
+    name: zricethezav/gitleaks:v8.18.4
+    entrypoint: [""]
   script:
-    - echo "runner works"
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - gitleaks detect --source . --log-opts="--all" --report-format json --report-path gitleaks-report.json --exit-code 1
+  artifacts:
+    when: always
+    path: gitleaks_report.json
+    expire_in: 30 days
