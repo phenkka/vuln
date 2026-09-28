@@ -16,5 +16,5 @@ gitleaks:
   artifacts:
     when: always
     paths: 
-      - gitleaks_report.json
+      - gitleaks-report.json
     expire_in: 30 days
