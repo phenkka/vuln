@@ -142,10 +142,10 @@ trivy-container:
     - FRONTEND="$CI_REGISTRY_IMAGE/frontend@$(cat frontend.digest)"
     - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-backend.json Dockerfile || FAILED=1
     - trivy config --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-config-frontend.json frontend/Dockerfile || FAILED=1
-    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-backend.json $IMAGE_BACKEND || FAILED=1
-    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-frontend.json $IMAGE_FRONTEND || FAILED=1
-    - trivy image --format cyclonedx --output sbom-backend.json $IMAGE_BACKEND
-    - trivy image --format cyclonedx --output sbom-frontend.json $IMAGE_FRONTEND
+    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-backend.json $BACKEND || FAILED=1
+    - trivy image --severity $TRIVY_SEVERITY --format json --exit-code 1 --output trivy-image-frontend.json $FRONTEND || FAILED=1
+    - trivy image --format cyclonedx --output sbom-backend.json $BACKEND
+    - trivy image --format cyclonedx --output sbom-frontend.json $FRONTEND
     - |
       if [ $FAILED -eq 1 ]; then
         echo "Trivy found CRITICAL or HIGH vulnerabilities"
