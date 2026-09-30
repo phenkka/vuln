@@ -195,7 +195,7 @@ test-deploy:
       ssh $SSH_OPTS "$TARGET" "
         set -e
         docker network inspect vulnshop >/dev/null 2>&1 || docker network create vulnshop
-        docker rm -ыf backend frontend >/dev/null 2>&1 || true
+        docker rm -f backend frontend >/dev/null 2>&1 || true
         docker run -d --name backend --network vulnshop --restart unless-stopped -p 5000:5000 $BACKEND
         docker run -d --name frontend --network vulnshop --restart unless-stopped -p 80:80 $FRONTEND
       "
