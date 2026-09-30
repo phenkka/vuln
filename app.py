@@ -348,4 +348,4 @@ if __name__ == "__main__":
     # [A02:2025] binds on 0.0.0.0 with debug=True by default in dev
     # runs — fine for an isolated lab VM, catastrophic on the open
     # internet.
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
