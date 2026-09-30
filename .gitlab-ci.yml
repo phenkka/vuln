@@ -208,3 +208,46 @@ test-deploy:
         if [ "$i" -eq 30 ]; then echo "Staging did not respond"; exit 1; fi
         sleep 2
       done
+
+zap-scan:
+  stage: testing
+  tags: [docker]
+  image:
+    name: ghcr.io/zaproxy/zaproxy:2.16.1
+    entrypoint: [""]
+  needs:
+    - job: test-deploy
+  variables:
+    ZAP_FAIL_RISK: "3"
+  script:
+    - mkdir -p /zap/wrk
+    - zap-baseline.py -t "http://$STAGING_HOST/" -I -J zap-baseline-frontend.json -r zap-baseline-frontend.html
+    - zap-full-scan.py -t "http://$STAGING_HOST:5000/" -m 2 -I -J zap-full-backend.json -r zap-full-backend.html
+    - cp /zap/wrk/zap-* .
+    - |
+      python3 - <<'PY'
+      import json, os, sys
+      limit = int(os.environ["ZAP_FAIL_RISK"])
+      names = {0: "Info", 1: "Low", 2: "Medium", 3: "High"}
+      failed = False
+      for report in ["zap-baseline-frontend.json", "zap-full-backend.json"]:
+          r = json.load(open(report))
+          for site in r.get("site", []):
+              for a in site.get("alerts", []):
+                  risk = int(a["riskcode"])
+                  print(f'{names[risk]:7} {a["alert"]} (x{a["count"]}) {site["@name"]}')
+                  if risk >= limit:
+                      failed = True
+      if failed:
+          print(f"ZAP found alerts with risk >= {names[limit]}")
+          sys.exit(1)
+      print(f"No ZAP alerts with risk >= {names[limit]}")
+      PY
+  artifacts:
+    when: always
+    paths:
+      - zap-baseline-frontend.json
+      - zap-baseline-frontend.html
+      - zap-full-backend.json
+      - zap-full-backend.html
+    expire_in: 30 days
