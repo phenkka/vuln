@@ -33,10 +33,12 @@ gitleaks:
   image: 
     name: zricethezav/gitleaks:v8.18.4
     entrypoint: [""]
+  needs: []
   variables:
     GIT_DEPTH: 0
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - git fetch origin '+refs/heads/*:refs/remotes/origin/*'
     - gitleaks detect --source . --log-opts="--all" --report-format json --report-path gitleaks-report.json --exit-code 1
   artifacts:
     when: always
@@ -50,6 +52,7 @@ semgrep:
   image:
     name: semgrep/semgrep:1.178.0-nonroot
     entrypoint: [""]
+  needs: []
   variables:
     SEMGREP_FAIL_SEVERITIES: "ERROR,WARNING"
   script:
@@ -84,6 +87,9 @@ semgrep:
           if counts.get(t, 0) > 0:
               print(f"Findings with severity {t}")
               failed = True
+      if r.get("errors"):
+        print("Semgrep reported scan errors - coverage is incomplete")
+        failed = True
       if failed:
           sys.exit(1)
       else:
@@ -101,6 +107,7 @@ trivy-sca:
   image:
     name: aquasec/trivy:0.50.1
     entrypoint: [""]
+  needs: []
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - FAILED=0
