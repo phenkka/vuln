@@ -1,6 +1,7 @@
 stages:
   - build
   - security
+  - testing
 
 variables:
   TRIVY_SEVERITY: "CRITICAL,HIGH"
@@ -170,3 +171,40 @@ trivy-container:
       - sbom-backend.json
       - sbom-frontend.json
     expire_in: 30 days
+
+test-deploy:
+  stage: testing
+  tags: [docker]
+  image:
+    name: alpine/git:2.47.2
+    entrypoint: [""]
+  needs:
+    - job: build-images
+  script:
+    - chmod 600 "$STAGING_SSH_KEY"
+    - SSH_OPTS="-i $STAGING_SSH_KEY -o UserKnownHostsFile=$STAGING_KNOWN_HOSTS -o StrictHostKeyChecking=yes -o BatchMode=yes"
+    - TARGET="$STAGING_USER@$STAGING_HOST"
+    - BACKEND="$CI_REGISTRY_IMAGE/backend@$(cat backend.digest)"
+    - FRONTEND="$CI_REGISTRY_IMAGE/frontend@$(cat frontend.digest)"
+    - |
+      echo "$CI_REGISTRY_PASSWORD" | ssh $SSH_OPTS -o ExitOnForwardFailure=yes \
+        -R 127.0.0.1:5050:gitlab.test:5050 \
+        -R 127.0.0.1:443:gitlab.test:443 \
+        "$TARGET" "docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY && docker pull $BACKEND && docker pull $FRONTEND && docker logout $CI_REGISTRY"
+    - |
+      ssh $SSH_OPTS "$TARGET" "
+        set -e
+        docker network inspect vulnshop >/dev/null 2>&1 || docker network create vulnshop
+        docker rm -ыf backend frontend >/dev/null 2>&1 || true
+        docker run -d --name backend --network vulnshop --restart unless-stopped -p 5000:5000 $BACKEND
+        docker run -d --name frontend --network vulnshop --restart unless-stopped -p 80:80 $FRONTEND
+      "
+    - |
+      for i in $(seq 1 30); do
+        if wget -q -O /dev/null "http://$STAGING_HOST/" && wget -q -O /dev/null "http://$STAGING_HOST:5000/"; then
+          echo "Staging is up"
+          break
+        fi
+        if [ "$i" -eq 30 ]; then echo "Staging did not respond"; exit 1; fi
+        sleep 2
+      done
