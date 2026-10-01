@@ -57,11 +57,14 @@ run_step() {
     local pid=$!
 
     if [ "$IS_TTY" -eq 1 ]; then
-        local i=0
+        local i=0 line width
+        width="$( (stty size </dev/tty) 2>/dev/null | awk '{print $2}' || true)"
+        width=$(( ${width:-80} - 1 ))
         tput civis 2>/dev/null || true
         while kill -0 "$pid" 2>/dev/null; do
             i=$(( (i + 1) % ${#SPIN} ))
-            printf "\r\033[K%s %s  %s" "$prefix" "${SPIN:$i:1}" "$desc"
+            line="${prefix} ${SPIN:$i:1}  ${desc}"
+            printf "\r\033[K%s" "${line:0:$width}"
             sleep 0.1
         done
         tput cnorm 2>/dev/null || true
