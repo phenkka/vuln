@@ -1,7 +1,7 @@
 stages:
   - build
-  - security
-  - testing
+  - scans
+  - report
 
 variables:
   TRIVY_SEVERITY: "CRITICAL,HIGH"
@@ -29,7 +29,7 @@ build-images:
 
 # Этап проверки на безопасность
 gitleaks:
-  stage: security
+  stage: scans
   tags: [docker]
   image: 
     name: zricethezav/gitleaks:v8.18.4
@@ -39,6 +39,7 @@ gitleaks:
     GIT_DEPTH: 0
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - git config --global http.sslCAInfo "$CI_SERVER_TLS_CA_FILE"
     - git fetch origin '+refs/heads/*:refs/remotes/origin/*'
     - gitleaks detect --source . --log-opts="--all" --report-format json --report-path gitleaks-report.json --exit-code 1
   artifacts:
@@ -48,7 +49,7 @@ gitleaks:
     expire_in: 30 days
 
 semgrep:
-  stage: security
+  stage: scans
   tags: [docker]
   image:
     name: semgrep/semgrep:1.178.0-nonroot
@@ -103,7 +104,7 @@ semgrep:
     expire_in: 30 days
 
 trivy-sca:
-  stage: security
+  stage: scans
   tags: [docker]
   image:
     name: aquasec/trivy:0.50.1
@@ -133,7 +134,7 @@ trivy-sca:
     expire_in: 30 days
 
 trivy-container:
-  stage: security
+  stage: scans
   tags: [docker]
   image:
     name: aquasec/trivy:0.50.1
@@ -173,7 +174,7 @@ trivy-container:
     expire_in: 30 days
 
 test-deploy:
-  stage: testing
+  stage: scans
   tags: [docker]
   image:
     name: alpine/git:2.47.2
@@ -210,7 +211,7 @@ test-deploy:
       done
 
 zap-scan:
-  stage: testing
+  stage: scans
   tags: [docker]
   image:
     name: ghcr.io/zaproxy/zaproxy:2.16.1
