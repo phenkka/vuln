@@ -225,7 +225,7 @@ zap-scan:
   script:
     - ln -s "$CI_PROJECT_DIR" /zap/wrk   
     - zap-baseline.py -t "http://$STAGING_HOST/" -I -z "-Xmx1g" -J zap-baseline-frontend.json -r zap-baseline-frontend.html
-    - zap-full-scan.py -t "http://$STAGING_HOST:5000/" -m 2 -I -z "-Xmx1g" -J zap-full-backend.json -r zap-full-backend.html
+    - zap-full-scan.py -t "http://$STAGING_HOST:5000/" -m 2 -I -z "-Xmx1g -config scanner.threadPerHost=2" -J zap-full-backend.json -r zap-full-backend.html
     - |
       python3 - <<'PY'
       import json, os, sys

@@ -491,8 +491,9 @@ step_import_repo() {
 
     git clone --mirror "$REPO_SRC" "$copy"
 
-    git -C "$copy" -c http.sslCAInfo="${DIR}/certs/ca.crt" push --all "$url"
-    git -C "$copy" -c http.sslCAInfo="${DIR}/certs/ca.crt" push --tags "$url"
+    local ca_opt="http.https://${HOST}/.sslCAInfo=${DIR}/certs/ca.crt"
+    git -C "$copy" -c "$ca_opt" push --all "$url"
+    git -C "$copy" -c "$ca_opt" push --tags "$url"
 }
 run_step "Importing the repository into GitLab" step_import_repo
 
