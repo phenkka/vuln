@@ -5,3 +5,13 @@ vulnshop.db
 uploads/*
 !uploads/.gitkeep
 .env
+
+infra/certs/
+infra/gitlab/
+infra/runner/
+infra/.staging/
+infra/docker-compose.yml
+infra/gitlab-secrets.json
+infra/telemetry/docker-compose.yml
+infra/*.log
+frontend/node_modules/

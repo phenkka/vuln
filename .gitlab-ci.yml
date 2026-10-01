@@ -181,6 +181,8 @@ test-deploy:
     entrypoint: [""]
   needs:
     - job: build-images
+  variables:
+    LOG_OPTS: "--log-driver fluentd --log-opt fluentd-address=127.0.0.1:24224 --log-opt fluentd-async=true --log-opt tag={{.Name}}"
   script:
     - chmod 600 "$STAGING_SSH_KEY"
     - SSH_OPTS="-i $STAGING_SSH_KEY -o UserKnownHostsFile=$STAGING_KNOWN_HOSTS -o StrictHostKeyChecking=yes -o BatchMode=yes"
@@ -197,8 +199,8 @@ test-deploy:
         set -e
         docker network inspect vulnshop >/dev/null 2>&1 || docker network create vulnshop
         docker rm -f backend frontend >/dev/null 2>&1 || true
-        docker run -d --name backend --network vulnshop --restart unless-stopped -p 5000:5000 $BACKEND
-        docker run -d --name frontend --network vulnshop --restart unless-stopped -p 80:80 $FRONTEND
+        docker run -d --name backend --network vulnshop --restart unless-stopped -p 5000:5000 $LOG_OPTS $BACKEND
+        docker run -d --name frontend --network vulnshop --restart unless-stopped -p 80:80 $LOG_OPTS $FRONTEND
       "
     - |
       for i in $(seq 1 30); do
@@ -251,3 +253,11 @@ zap-scan:
       - zap-full-backend.json
       - zap-full-backend.html
     expire_in: 30 days
+  
+telemetry:
+  stage: report
+  tags: [docker]
+  image: python:3.13-alpine
+  when: always
+  script:
+    - python3 infra/telemetry.py
