@@ -1,4 +1,3 @@
-# Frontend: сборка на устаревшем node, раздача старым nginx, root, без HEALTHCHECK.
 FROM node:18-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./

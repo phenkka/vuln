@@ -10,19 +10,19 @@ from urllib.parse import urlparse
 
 REPORTS = {
     "gitleaks-report.json":       ("gitleaks", "gitleaks",        "secrets"),
-    "semgrep-report.json":        ("semgrep",  "semgrep",         "sast"),
-    "trivy-sca-python.json":      ("trivy",    "trivy-sca",       "sca"),
-    "trivy-sca-js.json":          ("trivy",    "trivy-sca",       "sca"),
-    "trivy-image-backend.json":   ("trivy",    "trivy-container", "container"),
-    "trivy-image-frontend.json":  ("trivy",    "trivy-container", "container"),
+    "dt-findings-backend.json":       ("dependency-track", "dt-sca", "sca"),
+    "dt-findings-frontend.json":      ("dependency-track", "dt-sca", "sca"),
+    "dt-findings-frontend-deps.json": ("dependency-track", "dt-sca", "sca"),
     "trivy-config-backend.json":  ("trivy",    "trivy-container", "config"),
     "trivy-config-frontend.json": ("trivy",    "trivy-container", "config"),
+    "semgrep-report.json":        ("semgrep",  "semgrep",         "sast"),
     "zap-baseline-frontend.json": ("zap",      "zap-scan",        "dast"),
     "zap-full-backend.json":      ("zap",      "zap-scan",        "dast"),
 }
 
 SEMGREP_SEVERITY = {"ERROR": "high", "WARNING": "medium", "INFO": "low"}
 ZAP_SEVERITY = {"3": "high", "2": "medium", "1": "low", "0": "info"}
+DT_SEVERITY = {"CRITICAL": "critical", "HIGH": "high", "MEDIUM": "medium", "LOW": "low", "INFO": "info"}
 
 def finding(rule_id, title, severity, location, key):
     return {"rule_id": rule_id, "title": title, "severity": severity, "location": location, "key": key}
@@ -57,8 +57,16 @@ def parse_zap(data):
             yield finding(a.get("alertRef") or a["pluginid"], a["alert"],
                           ZAP_SEVERITY.get(str(a["riskcode"]), "info"), f'{path} (x{a.get("count", len(instances))})', a.get("alertRef") or a["pluginid"])
 
+def parse_dtrack(data):
+    # Находки Dependency-Track, в key пакет без версии - обновили пакет, а уязвимость осталась — та же находка
+    for x in data or []:
+        v, c = x["vulnerability"], x["component"]
+        title = v.get("title") or (v.get("description") or "").split("\n")[0][:200] or v["vulnId"]
+        package = c.get("purl", "").split("@")[0] or c["name"]
+        yield finding(v["vulnId"], title, DT_SEVERITY.get(v["severity"], "info"), f'{c["name"]}@{c.get("version", "")}', f'{v["vulnId"]}|{package}')
+
 PARSERS = {"gitleaks": parse_gitleaks, "semgrep": parse_semgrep,
-           "trivy": parse_trivy, "zap": parse_zap}
+           "trivy": parse_trivy, "zap": parse_zap, "dependency-track": parse_dtrack}
 
 def collect_findings(report_dir, run):
     docs = []
