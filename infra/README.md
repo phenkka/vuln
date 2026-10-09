@@ -6,8 +6,9 @@ VulnShop. Стенд целиком работает на одной машин�
 1. GitLab CE с раннером и Docker-in-Docker — в нём крутится CI/CD.
 2. Staging-виртуалка на Multipass — сюда пайплайн деплоит приложение и здесь его
    сканирует OWASP ZAP.
-3. Телеметрия на OpenSearch + Dashboards — сюда стекаются находки сканеров,
-   события джоб пайплайна и логи приложения с VM.
+3. Сервисы: OpenSearch + Dashboards — сюда стекаются находки сканеров, события джоб
+   пайплайна и логи приложения с VM; Dependency-Track — сюда пайплайн отправляет SBOM
+   для анализа уязвимых компонентов (SCA).
 
 Всё разворачивается тремя setup-скриптами. Каждый идёт по шагам, пишет подробный лог
 в соседний `*.log` файл и идемпотентен: повторный запуск ничего не ломает и не
@@ -29,7 +30,7 @@ VulnShop. Стенд целиком работает на одной машин�
 ```bash
 ./setup-gitlab.sh          # 1. GitLab + раннер + DinD, импорт репозитория
 ./setup-staging-env.sh     # 2. staging-VM (нужен GitLab: его CA и проект для CI-переменных)
-./setup-opensearch.sh      # 3. OpenSearch + Dashboards (нужны GitLab и запущенная VM)
+./setup-opensearch.sh      # 3. OpenSearch, Dashboards, Dependency-Track (нужны GitLab и запущенная VM)
 ```
 
 Почему именно так:
@@ -137,16 +138,27 @@ multipass delete --purge staging
 
 ### setup-opensearch.sh
 
-Поднимает телеметрию.
+Поднимает телеметрию и Dependency-Track.
 
 Что делает по шагам:
 
 - пишет `telemetry/docker-compose.yml` (compose-проект `telemetry`) и поднимает
-  OpenSearch и OpenSearch Dashboards, дожидаясь, пока оба станут healthy;
+  OpenSearch, OpenSearch Dashboards и Dependency-Track, дожидаясь, пока все станут healthy;
 - применяет шаблоны индексов — заранее задаёт типы полей для `findings*`,
   `pipeline-events*` и `app-logs*`;
 - создаёт index patterns в Dashboards и импортирует дашборды из `telemetry/dashboards/*.ndjson`;
-- записывает в CI/CD-переменные проекта `OPENSEARCH_URL` (не protected: это не секрет).
+- Dependency-Track: на первом запуске генерирует пароль `admin` (хранится в томе DT,
+  `/data/.admin-password`) и ставит его вместо стандартного `admin/admin`;
+- включает в Dependency-Track источник уязвимостей OSV (PyPI, npm, Debian, Alpine) и ждёт,
+  пока база скачается (~4 мин, только при первом запуске); NVD, OSS Index и npm audit
+  выключены — им нужен API-ключ или интернет при каждом анализе;
+- создаёт в Dependency-Track команду `gitlab-ci` с минимальными правами (загрузить SBOM,
+  создать проект, читать находки) и выдаёт ей API-ключ; при каждом запуске команда
+  пересоздаётся, старый ключ перестаёт работать;
+- записывает в CI/CD-переменные проекта `OPENSEARCH_URL`, `DT_URL` (не protected: это
+  не секрет) и `DT_API_KEY` (protected + masked).
+
+В конце печатает адрес Dependency-Track, логин `admin` и пароль.
 
 Как к OpenSearch обращаются:
 
@@ -156,14 +168,18 @@ multipass delete --purge staging
 | CI-джобы в DinD | `http://172.30.0.20:9200` — постоянный IP в сети GitLab |
 | Fluent Bit на VM | `http://<шлюз VM>:9200`, обычно `192.168.252.1` |
 
+Dependency-Track: с хоста — `http://127.0.0.1:8081`, из CI-джоб — `http://172.30.0.30:8080`.
+
 OpenSearch работает в режиме одного узла, heap по умолчанию `512m` (GitLab уже занимает
 заметную часть памяти). Security plugin выключен: порты опубликованы только на
 `127.0.0.1` и на адресе моста Multipass, снаружи машины их не видно. Для продакшена это
 не годится — нужны TLS и пользователи.
 
-Переменные окружения: `OPENSEARCH_IP`, `OPENSEARCH_HEAP`, `VM_NAME`, `PROJECT_PATH`.
+Переменные окружения: `OPENSEARCH_IP`, `OPENSEARCH_HEAP`, `VM_NAME`, `PROJECT_PATH`,
+`DT_IP`, `DT_PORT`, `OSV_ECOSYSTEMS`.
 
-`--reset` удаляет контейнеры, том с данными и `telemetry/docker-compose.yml`.
+`--reset` удаляет контейнеры, тома с данными (включая базу и пароль Dependency-Track)
+и `telemetry/docker-compose.yml`.
 
 ### telemetry.py
 
@@ -174,7 +190,7 @@ Python-скрипт джобы `telemetry` — последней джобы п�
 Что делает:
 
 - читает JSON-отчёты сканеров из артефактов предыдущих джоб: Gitleaks (секреты),
-  Semgrep (SAST), Trivy (SCA, образы, Dockerfile), OWASP ZAP (DAST); если какого-то
+  Semgrep (SAST), Dependency-Track (SCA), Trivy (Dockerfile), OWASP ZAP (DAST); если какого-то
   отчёта нет, пишет предупреждение и отправляет остальные;
 - приводит находки к единой схеме: `tool`, `category`, `rule_id`, `title`, `severity`
   (`critical/high/medium/low/info`), `location`, `fingerprint`;
@@ -199,7 +215,7 @@ Python-скрипт джобы `telemetry` — последней джобы п�
 
 - `docker-compose.yml` — compose стенда GitLab (`gitlab`, `dind`, `gitlab-runner`,
   сеть `172.30.0.0/24`);
-- `telemetry/docker-compose.yml` — compose телеметрии (`opensearch`, `dashboards`);
+- `telemetry/docker-compose.yml` — compose сервисов (`opensearch`, `dashboards`, `dependency-track`);
 - `certs/` — локальный CA (`ca.crt`, `ca.key`, `ca.srl`);
 - `gitlab/config/ssl/` — ключ и сертификат `gitlab.test`;
 - `runner/config/` — конфиг раннера с его токеном;
